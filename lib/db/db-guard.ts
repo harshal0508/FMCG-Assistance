@@ -8,6 +8,9 @@
  */
 
 export function assertLocalDatabase(context = 'Operation'): void {
+  if (process.env.ALLOW_CLOUD_SEED === 'true') {
+    return;
+  }
   const dbUrl = process.env.DATABASE_URL || '';
 
   // Extract hostname without exposing credentials

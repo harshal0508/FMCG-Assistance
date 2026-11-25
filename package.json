@@ -14,6 +14,7 @@
     "prisma:seed": "tsx prisma/seed.ts",
     "db:migrate": "prisma migrate deploy",
     "db:migrate:supabase": "node scripts/migrate-supabase.js",
+    "db:seed:supabase": "node scripts/seed-supabase.js",
     "db:status:supabase": "node scripts/status-supabase.js",
     "backup:supabase": "node scripts/backup-supabase.js",
     "restore:test": "node scripts/restore-test.js",
