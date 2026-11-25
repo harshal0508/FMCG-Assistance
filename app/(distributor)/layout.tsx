@@ -26,6 +26,7 @@ import {
   X,
 } from 'lucide-react';
 import { useTranslation } from '@/lib/i18n/context';
+import PageLoading from '@/components/distributor/page-loading';
 
 export default function DistributorLayout({
   children,
@@ -36,6 +37,24 @@ export default function DistributorLayout({
   const router = useRouter();
   const { language, setLanguage, t } = useTranslation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isNavigating, setIsNavigating] = useState(false);
+  const [navTargetTitle, setNavTargetTitle] = useState('');
+
+  const handleNavClick = (href: string, label?: string) => {
+    if (href !== pathname) {
+      setIsNavigating(true);
+      if (label) setNavTargetTitle(label);
+      setMobileMenuOpen(false);
+      // Auto-fallback reset after 7s in case transition was cancelled or instant
+      setTimeout(() => setIsNavigating(false), 7000);
+    }
+  };
+
+  // Reset navigation indicator whenever the path completes updating
+  useEffect(() => {
+    setIsNavigating(false);
+    setMobileMenuOpen(false);
+  }, [pathname]);
 
   // Dynamic tenant and owner profile state
   const [profile, setProfile] = useState({
@@ -182,6 +201,7 @@ export default function DistributorLayout({
               <Link
                 key={item.href}
                 href={item.href}
+                onClick={() => handleNavClick(item.href, item.label)}
                 className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition-colors ${
                   isActive
                     ? 'bg-white/20 text-white font-semibold'
@@ -196,6 +216,7 @@ export default function DistributorLayout({
 
           <Link
             href="/d/orders/new"
+            onClick={() => handleNavClick('/d/orders/new', language === 'hi' ? 'नया फोन ऑर्डर' : 'New Order')}
             className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl bg-[#F58220] text-white font-semibold hover:bg-[#F58220]/90 transition-colors mt-3 shadow-sm"
           >
             <PlusCircle className="w-5 h-5 shrink-0" />
@@ -244,7 +265,14 @@ export default function DistributorLayout({
       </aside>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 pb-20 lg:pb-0">
+      <div className="flex-1 flex flex-col min-w-0 pb-20 lg:pb-0 relative">
+        {/* Instant Top Navigation Progress Bar */}
+        {isNavigating && (
+          <div className="fixed top-0 left-0 right-0 h-1 z-50 overflow-hidden bg-blue-100">
+            <div className="h-full bg-gradient-to-r from-[#F58220] via-blue-500 to-[#17307A] animate-pulse w-full" />
+          </div>
+        )}
+
         {/* Top Header Bar for Desktop & Mobile */}
         <header className="bg-white border-b border-slate-200 px-3 md:px-8 py-2.5 sm:py-3 flex items-center justify-between sticky top-0 z-30 shadow-xs">
           <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -309,7 +337,11 @@ export default function DistributorLayout({
 
         {/* Page Content */}
         <main className="flex-1 p-3.5 md:p-6 lg:p-8 max-w-7xl w-full mx-auto">
-          {children}
+          {isNavigating ? (
+            <PageLoading targetPageName={navTargetTitle} />
+          ) : (
+            children
+          )}
         </main>
       </div>
 
@@ -372,7 +404,7 @@ export default function DistributorLayout({
                       <Link
                         key={item.href}
                         href={item.href}
-                        onClick={() => setMobileMenuOpen(false)}
+                        onClick={() => handleNavClick(item.href, item.label)}
                         className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-colors ${
                           isActive
                             ? 'bg-white/20 text-white font-bold'
@@ -433,6 +465,7 @@ export default function DistributorLayout({
         {/* 1. Dashboard */}
         <Link
           href="/d/dashboard"
+          onClick={() => handleNavClick('/d/dashboard', t('dashboard'))}
           className={`flex flex-col items-center justify-center flex-1 py-1 transition-colors ${
             pathname === '/d/dashboard' ? 'text-[#17307A] font-bold' : 'text-slate-500 hover:text-slate-800'
           }`}
@@ -444,6 +477,7 @@ export default function DistributorLayout({
         {/* 2. Orders */}
         <Link
           href="/d/orders"
+          onClick={() => handleNavClick('/d/orders', t('orders'))}
           className={`flex flex-col items-center justify-center flex-1 py-1 transition-colors ${
             pathname === '/d/orders' ? 'text-[#17307A] font-bold' : 'text-slate-500 hover:text-slate-800'
           }`}
@@ -455,6 +489,7 @@ export default function DistributorLayout({
         {/* 3. Campaigns */}
         <Link
           href="/d/campaigns"
+          onClick={() => handleNavClick('/d/campaigns', language === 'hi' ? 'अभियान' : 'Campaigns')}
           className={`flex flex-col items-center justify-center flex-1 py-1 transition-colors ${
             pathname === '/d/campaigns' ? 'text-[#17307A] font-bold' : 'text-slate-500 hover:text-slate-800'
           }`}
@@ -466,6 +501,7 @@ export default function DistributorLayout({
         {/* 4. Analytics */}
         <Link
           href="/d/analytics"
+          onClick={() => handleNavClick('/d/analytics', language === 'hi' ? 'विश्लेषण' : 'Analytics')}
           className={`flex flex-col items-center justify-center flex-1 py-1 transition-colors ${
             pathname === '/d/analytics' ? 'text-[#17307A] font-bold' : 'text-slate-500 hover:text-slate-800'
           }`}
