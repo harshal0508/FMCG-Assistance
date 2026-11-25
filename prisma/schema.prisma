@@ -1,0 +1,1166 @@
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ----------------------------------------------------
+// ENUMS
+// ----------------------------------------------------
+
+enum Role {
+  OWNER
+  ORDER_TAKER
+  PACKER
+}
+
+enum ShopStatus {
+  PENDING_APPROVAL
+  ACTIVE
+  REJECTED
+  BLOCKED
+}
+
+enum TenantStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  REJECTED
+}
+
+enum GstinStatus {
+  UNVERIFIED
+  FORMAT_OK
+  VERIFIED
+  REJECTED
+  SUSPENDED
+}
+
+enum OrderSource {
+  RETAILER_APP
+  PHOTO_AI
+  VOICE_AI
+  STAFF_PHONE
+  PDF_IMPORT
+}
+
+enum OrderStatus {
+  RECEIVED
+  CONFIRMED
+  PACKED
+  OUT_FOR_DELIVERY
+  DELIVERED
+  CANCELLED
+}
+
+enum OrderLineStatus {
+  ALLOCATED
+  OUT_OF_STOCK
+  SUBSTITUTED
+}
+
+enum SubstitutionStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  VOICE_CALL_TRIGGERED
+}
+
+enum BillEventType {
+  CREATED
+  SENT
+  OPENED
+  PENDING
+  PAID
+  PARTIALLY_PAID
+  CANCELLED
+}
+
+enum PaymentMethod {
+  UPI
+  CASH
+  CHEQUE
+  OTHER
+}
+
+enum MatchStatus {
+  MATCHED
+  MANUALLY_CONFIRMED
+  UNMATCHED
+}
+
+enum LedgerEntryType {
+  OPENING_BALANCE
+  BILL
+  PAYMENT
+  ROUNDING_DUE
+  ADJUSTMENT
+  CREDIT_NOTE
+}
+
+enum StockMovementReason {
+  SALE
+  RETURN
+  ADJUSTMENT
+  RESERVATION
+  RELEASE
+  IMPORT
+}
+
+enum SchemeType {
+  FREE_GOODS
+  SLAB_DISCOUNT
+  COMBO
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED_PAISE
+}
+
+enum CampaignStatus {
+  DRAFT
+  QUEUED
+  SENDING
+  COMPLETED
+  PAUSED
+}
+
+enum MessageStatus {
+  QUEUED
+  SENT
+  OPENED
+  ORDERED
+  FAILED
+}
+
+enum JobStatus {
+  QUEUED
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+// ----------------------------------------------------
+// TENANCY & PLATFORM
+// ----------------------------------------------------
+
+model Tenant {
+  id                     String           @id @default(cuid())
+  name                   String           // Business name e.g. "Shree Shyam FMCG Distributors"
+  owner_name             String
+  phone                  String?          // Optional contact field, not used for authentication
+  email                  String?          @unique
+  upi_id                 String?          // Direct UPI ID e.g. "shreeshyam@upi"
+  address                String?
+  city                   String?
+  state                  String?
+  timezone               String           @default("Asia/Kolkata")
+  order_cutoff_time      String           @default("18:00") // 24-hr format (HH:mm)
+  is_active              Boolean          @default(true)
+  status                 TenantStatus     @default(PENDING)
+  invite_code            String?          // Invite code used during registration
+  terms_accepted_at      DateTime?
+  terms_version          String?
+  privacy_accepted_at    DateTime?
+  privacy_version        String?
+  enable_gst             Boolean          @default(false)
+  gstin                  String?          @unique
+  gstin_status           GstinStatus      @default(UNVERIFIED)
+  gstin_verified_at      DateTime?
+  gstin_verified_by      String?
+  gstin_exception        Boolean          @default(false)
+  gstin_exception_reason String?
+  settings_json          String           @default("{}")
+  created_at             DateTime         @default(now())
+  updated_at             DateTime         @updatedAt
+
+  users                  Membership[]
+  staff_invites          StaffInvite[]
+  gst_verifications      GstVerification[]
+  brands                 Brand[]
+  categories             Category[]
+  areas                  Area[]
+  route_groups           RouteGroup[]
+  route_schedules        RouteSchedule[]
+  route_group_areas      RouteGroupArea[]
+  shops                  Shop[]
+  shop_tokens            ShopToken[]
+  shop_payer_names       ShopPayerName[]
+  join_requests          JoinRequest[]
+  rate_groups            RateGroup[]
+  rate_overrides         RateOverride[]
+  products               TenantProduct[]
+  product_aliases        ProductAlias[]
+  stock_movements        StockMovement[]
+  schemes                Scheme[]
+  scheme_products        SchemeProduct[]
+  scheme_apps            SchemeApplication[]
+  orders                 Order[]
+  order_lines            OrderLine[]
+  order_events           OrderEvent[]
+  substitutions          Substitution[]
+  bills                  Bill[]
+  bill_events            BillEvent[]
+  payments               Payment[]
+  allocations            PaymentAllocation[]
+  unmatched_pmts         UnmatchedPayment[]
+  ledger_entries         LedgerEntry[]
+  campaigns              Campaign[]
+  messages               OutboxMessage[]
+  call_attempts          CallAttempt[]
+  parse_jobs             ParseJob[]
+  import_jobs            ImportJob[]
+  sequences              TenantSequence[]
+  audit_logs             AuditLog[]
+  tenant_plan            TenantPlan?
+  usage_counters         UsageCounter[]
+  festival_suggestions   FestivalSuggestion[]
+
+  @@map("tenants")
+}
+
+model User {
+  id            String       @id @default(cuid())
+  phone         String?
+  email         String?      @unique
+  google_sub    String?      @unique
+  google_email  String?
+  password_hash String?      // Optional / deprecated in favor of Google OIDC & PIN
+  name          String
+  created_at    DateTime     @default(now())
+
+  memberships   Membership[]
+  devices       Device[]
+  sessions      Session[]
+
+  @@map("users")
+}
+
+model Membership {
+  id         String   @id @default(cuid())
+  tenant_id  String
+  user_id    String
+  role       Role     @default(ORDER_TAKER)
+  is_active  Boolean  @default(true)
+  created_at DateTime @default(now())
+
+  tenant     Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([tenant_id, user_id])
+  @@index([tenant_id])
+  @@map("memberships")
+}
+
+model Device {
+  id                  String              @id @default(cuid())
+  user_id             String
+  device_fingerprint  String
+  device_name         String              @default("Unknown Device")
+  is_trusted          Boolean             @default(true)
+  pin_hash            String?             // bcrypt hash of 6-digit PIN
+  pin_failed_attempts Int                 @default(0)
+  pin_locked_at       DateTime?
+  last_active_at      DateTime            @default(now())
+  revoked_at          DateTime?
+  created_at          DateTime            @default(now())
+
+  user                User                @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  sessions            Session[]
+  passkeys            PasskeyCredential[]
+
+  @@unique([user_id, device_fingerprint])
+  @@index([user_id])
+  @@map("devices")
+}
+
+model Session {
+  id             String    @id @default(cuid())
+  user_id        String
+  device_id      String
+  token_hash     String    @unique
+  unlocked_until DateTime? // Null or past = locked (requires PIN)
+  last_seen_at   DateTime  @default(now())
+  expires_at     DateTime
+  revoked_at     DateTime?
+  user_agent     String?
+  ip_hash        String?
+  created_at     DateTime  @default(now())
+
+  user           User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  device         Device    @relation(fields: [device_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@index([device_id])
+  @@map("sessions")
+}
+
+model PasskeyCredential {
+  id         String   @id // Base64URL credential ID
+  device_id  String
+  public_key String   // Base64URL encoded public key
+  counter    BigInt   @default(0)
+  transports String?  // JSON string e.g. ["internal", "hybrid"]
+  created_at DateTime @default(now())
+
+  device     Device   @relation(fields: [device_id], references: [id], onDelete: Cascade)
+
+  @@index([device_id])
+  @@map("passkey_credentials")
+}
+
+model StaffInvite {
+  id         String    @id @default(cuid())
+  tenant_id  String
+  role       Role      @default(ORDER_TAKER)
+  token_hash String    @unique
+  created_by String
+  expires_at DateTime
+  used_at    DateTime?
+  revoked_at DateTime?
+  created_at DateTime  @default(now())
+
+  tenant     Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id])
+  @@map("staff_invites")
+}
+
+model GstVerification {
+  id         String   @id @default(cuid())
+  tenant_id  String
+  provider   String   // "MOCK", "MANUAL", "PROVIDER"
+  status     String   // "VERIFIED", "REJECTED", "SUSPENDED"
+  legal_name String?
+  trade_name String?
+  state      String?
+  checked_at DateTime @default(now())
+  checked_by String
+
+  tenant     Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id])
+  @@map("gst_verifications")
+}
+
+model AdminUser {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String
+  google_sub    String?   @unique
+  totp_secret   String?
+  totp_enabled  Boolean   @default(false)
+  created_at    DateTime  @default(now())
+  last_login_at DateTime?
+
+  @@map("admin_users")
+}
+
+// ----------------------------------------------------
+// CATEGORIES & PRODUCTS (Category-Agnostic Engine)
+// ----------------------------------------------------
+
+model Category {
+  id                     String          @id @default(cuid())
+  tenant_id              String
+  name                   String          // e.g. "Staples", "Edible Oil", "Snacks & Biscuits"
+  hindi_name             String          // "खाद्यान्न / किराना", "खाद्य तेल", "नमकीन और बिस्कुट"
+  icon                   String          // Lucide icon name or emoji
+  track_batch_expiry     Boolean         @default(false)
+  allow_decimal_quantity Boolean         @default(false) // e.g. true for weight/volume
+  attributes_schema_json String          @default("{}") // Validation schema for size, flavor, etc.
+  sort_order             Int             @default(0)
+  is_active              Boolean         @default(true)
+  created_at             DateTime        @default(now())
+
+  tenant                 Tenant          @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  master_products        MasterProduct[]
+
+  @@index([tenant_id])
+  @@map("categories")
+}
+
+model MasterProduct {
+  id                 String          @id @default(cuid())
+  category_id        String
+  name               String          // Generic: "Refined Soyabean Oil 1L Pouch"
+  hindi_name         String?         // "रिफाइंड सोयाबीन तेल १ लीटर"
+  mrp_paise          Int             // e.g. 13500 (₹135.00)
+  image_url          String
+  base_unit          String          // Smallest atomic unit: "ml", "gram", "piece", "packet"
+  default_order_unit String          // Preferred wholesale unit: "litre", "kg", "bundle", "carton"
+  unit_chain_json    String          // JSON array of UnitStep definitions
+  attributes_json    String          @default("{}")
+  created_at         DateTime        @default(now())
+
+  category           Category        @relation(fields: [category_id], references: [id], onDelete: Restrict)
+  tenant_products    TenantProduct[]
+
+  @@index([category_id])
+  @@map("master_products")
+}
+
+model Brand {
+  id          String          @id @default(cuid())
+  tenant_id   String
+  name        String          // e.g. "Sunrise Foods", "Crunch Co", "Golden Grains"
+  hindi_name  String?
+  sort_order  Int             @default(0)
+  is_active   Boolean         @default(true)
+  created_at  DateTime        @default(now())
+  updated_at  DateTime        @updatedAt
+
+  tenant          Tenant          @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  tenant_products TenantProduct[]
+
+  @@unique([tenant_id, name])
+  @@index([tenant_id])
+  @@map("brands")
+}
+
+model TenantProduct {
+  id                   String          @id @default(cuid())
+  tenant_id            String
+  brand_id             String?
+  sub_group            String?         // Optional sub-group e.g. "Namkeen", "Chips", "Biscuits", "Edible Oil"
+  master_product_id    String?
+  name                 String?         // Tenant-defined product name (if not using master product)
+  hindi_name           String?
+  mrp_paise            Int?
+  base_unit            String?         // e.g. "packet", "piece", "gram", "ml"
+  default_order_unit   String?         // e.g. "carton", "box", "bag"
+  unit_chain_json      String?         // Unit steps JSON
+  rate_paise           Int             // PTR (Price To Retailer) e.g. 11800 (₹118.00)
+  stock_qty            Int             @default(0) // Stored strictly as positive integer in BASE unit
+  in_stock_flag        Boolean         @default(true)
+  daily_max_limit      Int?            // Null = unlimited, or integer in base units
+  is_new               Boolean         @default(false)
+  new_until_date       DateTime?
+  is_visible           Boolean         @default(true)
+  attributes_override  String          @default("{}")
+  created_at           DateTime        @default(now())
+  updated_at           DateTime        @updatedAt
+
+  tenant               Tenant          @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  brand                Brand?          @relation(fields: [brand_id], references: [id], onDelete: SetNull)
+  master_product       MasterProduct?  @relation(fields: [master_product_id], references: [id], onDelete: SetNull)
+  aliases              ProductAlias[]
+  stock_movements      StockMovement[]
+  order_lines          OrderLine[]
+  rate_overrides       RateOverride[]
+  scheme_products      SchemeProduct[]
+
+  @@index([tenant_id, brand_id])
+  @@index([tenant_id])
+  @@map("tenant_products")
+}
+
+model ProductAlias {
+  id                String        @id @default(cuid())
+  tenant_id         String
+  tenant_product_id String
+  local_name        String        // Local alias e.g. "chotu parle", "fortune tel"
+  created_at        DateTime      @default(now())
+
+  tenant            Tenant        @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  tenant_product    TenantProduct @relation(fields: [tenant_product_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id, local_name])
+  @@map("product_aliases")
+}
+
+model StockMovement {
+  id                String              @id @default(cuid())
+  tenant_id         String
+  tenant_product_id String
+  change            Int                 // Integer in base units (+ or -)
+  reason            StockMovementReason
+  reference_id      String?             // e.g. order_id, import_job_id
+  actor_user_id     String?
+  notes             String?
+  created_at        DateTime            @default(now())
+
+  tenant            Tenant              @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  tenant_product    TenantProduct       @relation(fields: [tenant_product_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id, tenant_product_id])
+  @@map("stock_movements")
+}
+
+// ----------------------------------------------------
+// GEOGRAPHY, ROUTES & SHOPS
+// ----------------------------------------------------
+
+model Area {
+  id           String           @id @default(cuid())
+  tenant_id    String
+  name         String           // e.g. "Main Market", "Station Road"
+  notes        String?
+  created_at   DateTime         @default(now())
+
+  tenant       Tenant           @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  shops        Shop[]
+  route_areas  RouteGroupArea[]
+
+  @@unique([tenant_id, name])
+  @@index([tenant_id])
+  @@map("areas")
+}
+
+model RouteGroup {
+  id           String           @id @default(cuid())
+  tenant_id    String
+  name         String           // "Monday North Route"
+  created_at   DateTime         @default(now())
+
+  tenant       Tenant           @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  route_areas  RouteGroupArea[]
+  schedules    RouteSchedule[]
+  orders       Order[]
+  campaigns    Campaign[]
+
+  @@unique([tenant_id, name])
+  @@index([tenant_id])
+  @@map("route_groups")
+}
+
+model RouteGroupArea {
+  tenant_id      String
+  route_group_id String
+  area_id        String
+
+  tenant         Tenant     @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  route_group    RouteGroup @relation(fields: [route_group_id], references: [id], onDelete: Cascade)
+  area           Area       @relation(fields: [area_id], references: [id], onDelete: Cascade)
+
+  @@id([route_group_id, area_id])
+  @@index([tenant_id])
+  @@map("route_group_areas")
+}
+
+model RouteSchedule {
+  id                  String     @id @default(cuid())
+  tenant_id           String
+  route_group_id      String
+  order_day_of_week   Int        // 0 = Sunday, 1 = Monday, etc.
+  order_cutoff_time   String     // "11:00" in tenant timezone
+  packing_day_of_week Int
+  delivery_day_of_week Int
+  is_active           Boolean    @default(true)
+
+  tenant              Tenant     @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  route_group         RouteGroup @relation(fields: [route_group_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id, route_group_id])
+  @@map("route_schedules")
+}
+
+model RateGroup {
+  id             String         @id @default(cuid())
+  tenant_id      String
+  name           String         // "Wholesale Tier A", "Sub-distributor"
+  discount_type  DiscountType   @default(PERCENTAGE)
+  discount_value Int            // Percent (e.g. 2 for 2%) or paise
+  created_at     DateTime       @default(now())
+
+  tenant         Tenant         @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  shops          Shop[]
+  overrides      RateOverride[]
+
+  @@index([tenant_id])
+  @@map("rate_groups")
+}
+
+model RateOverride {
+  id                String        @id @default(cuid())
+  tenant_id         String
+  rate_group_id     String
+  tenant_product_id String
+  special_rate_paise Int
+
+  tenant            Tenant        @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  rate_group        RateGroup     @relation(fields: [rate_group_id], references: [id], onDelete: Cascade)
+  tenant_product    TenantProduct @relation(fields: [tenant_product_id], references: [id], onDelete: Cascade)
+
+  @@unique([rate_group_id, tenant_product_id])
+  @@index([tenant_id])
+  @@map("rate_overrides")
+}
+
+model Shop {
+  id                        String          @id @default(cuid())
+  tenant_id                 String
+  area_id                   String?
+  rate_group_id             String?
+  shop_number               String          // e.g. "SHP-0001"
+  name                      String          // "Gupta Kirana Store"
+  owner_name                String          // "Ramesh Gupta"
+  phone                     String          // Primary WhatsApp number
+  alt_phone                 String?
+  address                   String
+  credit_limit_paise        Int             @default(500000) // ₹5,000 warning threshold
+  hold_flag                 Boolean         @default(false)  // Strict block on new orders
+  opt_out_whatsapp          Boolean         @default(false)
+  opt_out_calls             Boolean         @default(false)
+  consent_source            String          @default("ONBOARDING")
+  consent_date              DateTime        @default(now())
+  usual_order_interval_days Int             @default(7)
+  status                    ShopStatus      @default(ACTIVE)
+  created_at                DateTime        @default(now())
+  updated_at                DateTime        @updatedAt
+
+  tenant                    Tenant          @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  area                      Area?           @relation(fields: [area_id], references: [id], onDelete: SetNull)
+  rate_group                RateGroup?      @relation(fields: [rate_group_id], references: [id], onDelete: SetNull)
+  tokens                    ShopToken[]
+  payer_names               ShopPayerName[]
+  orders                    Order[]
+  bills                     Bill[]
+  payments                  Payment[]
+  ledger_entries            LedgerEntry[]
+  messages                  OutboxMessage[]
+  call_attempts             CallAttempt[]
+
+  @@unique([tenant_id, phone])
+  @@index([tenant_id])
+  @@map("shops")
+}
+
+model ShopToken {
+  id         String    @id @default(cuid())
+  tenant_id  String
+  shop_id    String
+  token_hash String    @unique // SHA-256 hash only. Raw token never stored.
+  expires_at DateTime
+  revoked_at DateTime?
+  created_at DateTime  @default(now())
+
+  tenant     Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  shop       Shop      @relation(fields: [shop_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id, token_hash])
+  @@map("shop_tokens")
+}
+
+model ShopPayerName {
+  id         String   @id @default(cuid())
+  tenant_id  String
+  shop_id    String
+  payer_name String   // Known bank name / UPI ID e.g. "Ramesh Kumar Gupta", "gupta.kirana@okaxis"
+  created_at DateTime @default(now())
+
+  tenant     Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  shop       Shop     @relation(fields: [shop_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id, payer_name])
+  @@map("shop_payer_names")
+}
+
+model JoinRequest {
+  id         String   @id @default(cuid())
+  tenant_id  String
+  name       String
+  owner_name String
+  phone      String
+  address    String
+  area_name  String
+  status     String   @default("PENDING") // PENDING, APPROVED, REJECTED
+  created_at DateTime @default(now())
+
+  tenant     Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id])
+  @@map("join_requests")
+}
+
+// ----------------------------------------------------
+// SCHEMES ENGINE
+// ----------------------------------------------------
+
+model Scheme {
+  id           String              @id @default(cuid())
+  tenant_id    String
+  name         String              // "Buy 10 Bundles Wafers, Get 1 Pkt Biscuit Free"
+  type         SchemeType
+  rule_json    String              // Validated JSON parameters
+  start_date   DateTime
+  end_date     DateTime
+  is_active    Boolean             @default(true)
+  created_at   DateTime            @default(now())
+
+  tenant       Tenant              @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  products     SchemeProduct[]
+  applications SchemeApplication[]
+
+  @@index([tenant_id])
+  @@map("schemes")
+}
+
+model SchemeProduct {
+  id                String        @id @default(cuid())
+  tenant_id         String
+  scheme_id         String
+  tenant_product_id String
+  is_trigger        Boolean       @default(true)
+  is_reward         Boolean       @default(false)
+
+  tenant            Tenant        @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  scheme            Scheme        @relation(fields: [scheme_id], references: [id], onDelete: Cascade)
+  tenant_product    TenantProduct @relation(fields: [tenant_product_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id, scheme_id])
+  @@map("scheme_products")
+}
+
+model SchemeApplication {
+  id            String    @id @default(cuid())
+  tenant_id     String
+  scheme_id     String
+  order_line_id String
+  units_applied Int
+  benefit_paise Int
+  created_at    DateTime  @default(now())
+
+  tenant        Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  scheme        Scheme    @relation(fields: [scheme_id], references: [id], onDelete: Cascade)
+  order_line    OrderLine @relation(fields: [order_line_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id, scheme_id])
+  @@map("scheme_applications")
+}
+
+// ----------------------------------------------------
+// ORDERS & SUBSTITUTIONS
+// ----------------------------------------------------
+
+model Order {
+  id                    String        @id @default(cuid())
+  tenant_id             String
+  shop_id               String
+  route_group_id        String?
+  order_number          String        // e.g. "ORD-202611-0001"
+  source                OrderSource   @default(RETAILER_APP)
+  status                OrderStatus   @default(RECEIVED)
+  subtotal_paise        Int
+  scheme_discount_paise Int           @default(0)
+  total_paise           Int
+  delivery_date         DateTime?
+  notes                 String?
+  created_at            DateTime      @default(now())
+  updated_at            DateTime      @updatedAt
+
+  tenant                Tenant        @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  shop                  Shop          @relation(fields: [shop_id], references: [id], onDelete: Cascade)
+  route_group           RouteGroup?   @relation(fields: [route_group_id], references: [id], onDelete: SetNull)
+  lines                 OrderLine[]
+  events                OrderEvent[]
+  substitutions         Substitution[]
+  bills                 Bill[]
+
+  @@index([tenant_id, shop_id])
+  @@index([tenant_id, order_number])
+  @@map("orders")
+}
+
+model OrderLine {
+  id                   String              @id @default(cuid())
+  tenant_id            String
+  order_id             String
+  tenant_product_id    String
+  quantity_base        Int                 // Strictly stored in base unit
+  order_unit_name      String              // e.g. "bundle", "kg", "carton"
+  display_quantity     Float               // What user entered e.g. 2.5
+  price_paise_snapshot Int                 // Immutable PTR snapshot
+  scheme_snapshot_json String              @default("{}")
+  free_goods_qty_base  Int                 @default(0)
+  status               OrderLineStatus     @default(ALLOCATED)
+  created_at           DateTime            @default(now())
+
+  tenant               Tenant              @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  order                Order               @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  tenant_product       TenantProduct       @relation(fields: [tenant_product_id], references: [id], onDelete: Restrict)
+  scheme_apps          SchemeApplication[]
+  substitutions        Substitution[]
+
+  @@index([tenant_id, order_id])
+  @@map("order_lines")
+}
+
+model OrderEvent {
+  id            String      @id @default(cuid())
+  tenant_id     String
+  order_id      String
+  status        OrderStatus
+  actor_user_id String?
+  notes         String?
+  created_at    DateTime    @default(now())
+
+  tenant        Tenant      @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  order         Order       @relation(fields: [order_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id, order_id])
+  @@map("order_events")
+}
+
+model Substitution {
+  id                   String             @id @default(cuid())
+  tenant_id            String
+  order_id             String
+  order_line_id        String
+  original_product_id  String
+  suggested_product_id String
+  requested_qty_base   Int
+  shop_reply           SubstitutionStatus @default(PENDING)
+  resolved_by          String?
+  created_at           DateTime           @default(now())
+  updated_at           DateTime           @updatedAt
+
+  tenant               Tenant             @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  order                Order              @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  order_line           OrderLine          @relation(fields: [order_line_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id, order_id])
+  @@map("substitutions")
+}
+
+// ----------------------------------------------------
+// BILLS, DIRECT UPI & PAYMENTS (No Drift)
+// ----------------------------------------------------
+
+model Bill {
+  id            String              @id @default(cuid())
+  tenant_id     String
+  shop_id       String
+  order_id      String
+  bill_number   String              // e.g. "BILL-202611-0001"
+  version       Int                 @default(1)
+  total_paise   Int
+  upi_reference String              @unique // tr parameter
+  upi_string    String              // upi://pay?...
+  created_at    DateTime            @default(now())
+  updated_at    DateTime            @updatedAt
+
+  tenant        Tenant              @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  shop          Shop                @relation(fields: [shop_id], references: [id], onDelete: Cascade)
+  order         Order               @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  allocations   PaymentAllocation[]
+  events        BillEvent[]
+
+  @@index([tenant_id, shop_id])
+  @@index([tenant_id, order_id])
+  @@map("bills")
+}
+
+model BillEvent {
+  id            String        @id @default(cuid())
+  tenant_id     String
+  bill_id       String
+  event_type    BillEventType
+  actor_user_id String?
+  metadata_json String        @default("{}")
+  created_at    DateTime      @default(now())
+
+  tenant        Tenant        @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  bill          Bill          @relation(fields: [bill_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id, bill_id])
+  @@map("bill_events")
+}
+
+model Payment {
+  id                   String              @id @default(cuid())
+  tenant_id            String
+  shop_id              String?             // Nullable if temporarily unmatched
+  amount_paise         Int
+  method               PaymentMethod       @default(UPI)
+  bank_utr             String?             // 12-digit UTR
+  payer_name           String?
+  raw_sms              String?
+  match_status         MatchStatus         @default(MATCHED)
+  confirmed_by_user_id String?
+  payment_date         DateTime            @default(now())
+  created_at           DateTime            @default(now())
+
+  tenant               Tenant              @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  shop                 Shop?               @relation(fields: [shop_id], references: [id], onDelete: SetNull)
+  allocations          PaymentAllocation[]
+  unmatched            UnmatchedPayment?
+
+  @@unique([tenant_id, bank_utr])
+  @@index([tenant_id, shop_id])
+  @@map("payments")
+}
+
+model PaymentAllocation {
+  id           String   @id @default(cuid())
+  tenant_id    String
+  payment_id   String
+  bill_id      String
+  amount_paise Int
+  created_at   DateTime @default(now())
+
+  tenant       Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  payment      Payment  @relation(fields: [payment_id], references: [id], onDelete: Cascade)
+  bill         Bill     @relation(fields: [bill_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id, bill_id])
+  @@map("payment_allocations")
+}
+
+model UnmatchedPayment {
+  id          String    @id @default(cuid())
+  tenant_id   String
+  payment_id  String    @unique
+  notes       String?
+  resolved_at DateTime?
+
+  tenant      Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  payment     Payment   @relation(fields: [payment_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id])
+  @@map("unmatched_payments")
+}
+
+// ----------------------------------------------------
+// APPEND-ONLY CREDIT LEDGER
+// ----------------------------------------------------
+
+model LedgerEntry {
+  id           String          @id @default(cuid())
+  tenant_id    String
+  shop_id      String
+  type         LedgerEntryType
+  amount_paise Int             // Positive = due/debit, Negative = payment/credit
+  reference_id String?         // bill_id, payment_id, or credit_note_id
+  description  String
+  created_at   DateTime        @default(now())
+
+  tenant       Tenant          @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  shop         Shop            @relation(fields: [shop_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id, shop_id])
+  @@map("ledger_entries")
+}
+
+// ----------------------------------------------------
+// RACE-SAFE NUMBER SEQUENCES PER TENANT
+// ----------------------------------------------------
+
+model TenantSequence {
+  id          String   @id @default(cuid())
+  tenant_id   String
+  entity_type String   // "ORDER", "BILL", "SHOP"
+  current_val Int      @default(0)
+  prefix      String   // e.g. "ORD-", "BILL-", "SHP-"
+  padding     Int      @default(4) // e.g. 4 -> "0001"
+  updated_at  DateTime @updatedAt
+
+  tenant      Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@unique([tenant_id, entity_type])
+  @@index([tenant_id])
+  @@map("tenant_sequences")
+}
+
+// ----------------------------------------------------
+// MESSAGING, JOBS & AUDITS
+// ----------------------------------------------------
+
+model Campaign {
+  id             String          @id @default(cuid())
+  tenant_id      String
+  route_group_id String?
+  name           String
+  status         CampaignStatus  @default(DRAFT)
+  total_targets  Int             @default(0)
+  sent_count     Int             @default(0)
+  opened_count   Int             @default(0)
+  ordered_count  Int             @default(0)
+  created_at     DateTime        @default(now())
+
+  tenant         Tenant          @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  route_group    RouteGroup?     @relation(fields: [route_group_id], references: [id], onDelete: SetNull)
+  messages       OutboxMessage[]
+
+  @@index([tenant_id])
+  @@map("campaigns")
+}
+
+model OutboxMessage {
+  id              String        @id @default(cuid())
+  tenant_id       String
+  campaign_id     String?
+  shop_id         String
+  channel         String        @default("WHATSAPP")
+  recipient_phone String
+  template_name   String        @default("order_reminder")
+  body            String
+  status          MessageStatus @default(QUEUED)
+  opened_at       DateTime?
+  ordered_at      DateTime?
+  created_at      DateTime      @default(now())
+
+  tenant          Tenant        @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  campaign        Campaign?     @relation(fields: [campaign_id], references: [id], onDelete: SetNull)
+  shop            Shop          @relation(fields: [shop_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id, shop_id])
+  @@map("messages")
+}
+
+model CallAttempt {
+  id             String   @id @default(cuid())
+  tenant_id      String
+  shop_id        String
+  trigger_reason String
+  script         String
+  result         String   @default("SIMULATED_SUCCESS")
+  transcript     String?  @db.Text
+  cost_paise     Int      @default(0)
+  created_at     DateTime @default(now())
+
+  tenant         Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  shop           Shop     @relation(fields: [shop_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id, shop_id])
+  @@map("call_attempts")
+}
+
+model ParseJob {
+  id                 String   @id @default(cuid())
+  tenant_id          String
+  type               String   // "PHOTO", "VOICE", "PDF"
+  file_url           String
+  raw_model_output   String?  @db.Text
+  matched_result_json String? @db.Text
+  status             String   @default("PENDING") // PENDING, REVIEWED, CONFIRMED
+  confirmed_by       String?
+  created_at         DateTime @default(now())
+
+  tenant             Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id])
+  @@map("parse_jobs")
+}
+
+model ImportJob {
+  id                String   @id @default(cuid())
+  tenant_id         String
+  file_url          String
+  format            String   // "SUPPLIER_PDF_NIGHTLY", "CSV"
+  parsed_rows_json  String   @db.Text
+  review_status     String   @default("PENDING_REVIEW")
+  created_at        DateTime @default(now())
+
+  tenant            Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id])
+  @@map("import_jobs")
+}
+
+model BackgroundJob {
+  id              String    @id @default(cuid())
+  type            String    // "ROUTE_REMINDER", "BROADCAST_BATCH", "AI_PARSE"
+  payload_json    String
+  run_at          DateTime  @default(now())
+  attempts        Int       @default(0)
+  status          JobStatus @default(QUEUED)
+  idempotency_key String    @unique
+  created_at      DateTime  @default(now())
+
+  @@index([status, run_at])
+  @@map("jobs")
+}
+
+model Plan {
+  id                 String       @id @default(cuid())
+  name               String       @unique
+  max_active_shops   Int          @default(500)
+  max_whatsapp_msgs  Int          @default(10000)
+  max_ai_calls       Int          @default(500)
+  max_ai_parses      Int          @default(2000)
+  max_staff_users    Int          @default(20)
+  feature_flags_json String       @default("{}")
+
+  tenant_plans       TenantPlan[]
+
+  @@map("plans")
+}
+
+model TenantPlan {
+  id             String    @id @default(cuid())
+  tenant_id      String    @unique
+  plan_id        String
+  overrides_json String    @default("{}")
+  start_date     DateTime  @default(now())
+  end_date       DateTime?
+
+  tenant         Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  plan           Plan      @relation(fields: [plan_id], references: [id], onDelete: Restrict)
+
+  @@map("tenant_plans")
+}
+
+model UsageCounter {
+  id         String   @id @default(cuid())
+  tenant_id  String
+  metric     String   // "whatsapp", "ai_parses", "ai_calls", "active_shops"
+  period_ym  String   // e.g. "2026-11"
+  count      Int      @default(0)
+
+  tenant     Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@unique([tenant_id, metric, period_ym])
+  @@index([tenant_id])
+  @@map("usage_counters")
+}
+
+model AuditLog {
+  id                String   @id @default(cuid())
+  tenant_id         String
+  actor_user_id     String?
+  action            String   // "STOCK_UPDATED", "PAYMENT_CONFIRMED", "ORDER_EDITED"
+  target_entity     String   // "Order", "Payment", "TenantProduct"
+  target_id         String
+  before_state_json String?  @db.Text
+  after_state_json  String?  @db.Text
+  created_at        DateTime @default(now())
+
+  tenant            Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id])
+  @@map("audit_log")
+}
+
+model RateLimitEntry {
+  id         String   @id @default(cuid())
+  key        String
+  timestamp  DateTime @default(now())
+
+  @@index([key, timestamp])
+  @@map("rate_limit_entries")
+}
+
+model FestivalSuggestion {
+  id               String   @id @default(cuid())
+  tenant_id        String
+  festival_name    String
+  festival_name_hi String?
+  start_date       DateTime
+  end_date         DateTime
+  notes            String?
+  items_json       String   @default("[]")
+  is_active        Boolean  @default(true)
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+
+  tenant           Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id, start_date, end_date])
+  @@map("festival_suggestions")
+}
