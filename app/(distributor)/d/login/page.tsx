@@ -90,7 +90,7 @@ export default async function StaffLoginPage() {
             {/* Security Trust Footnote */}
             <div className="pt-3 text-center text-xs text-slate-500 flex items-center justify-center gap-1.5 border-t border-slate-100">
               <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-              <span>Device-Bound Security • Peppered Bcrypt • 15m Idle Lock</span>
+              <span>Wholesale Terminal Security • Auto-Lock Protected</span>
             </div>
           </div>
         </div>

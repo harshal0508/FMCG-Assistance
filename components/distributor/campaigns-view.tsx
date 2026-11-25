@@ -468,8 +468,8 @@ export default function CampaignsView({
                 </div>
                 <span className="block text-[10px] sm:text-[11px] text-slate-400 text-center mt-1.5">
                   {language === 'hi'
-                    ? '* परीक्षण आउटबॉक्स में कतारबद्ध किए जाते हैं।'
-                    : '* Reminders are safely queued in the test outbox without incurring live API cost.'}
+                    ? '* रिमाइंडर आउटबॉक्स में सुरक्षित रूप से कतारबद्ध किए जाते हैं।'
+                    : '* Reminders are safely queued in the outbox ready for dispatch.'}
                 </span>
               </div>
             </div>

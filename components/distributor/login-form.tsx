@@ -46,11 +46,10 @@ export default function LoginForm({
         throw new Error(data.error || 'Incorrect PIN. Please enter your 6-digit PIN (839201).');
       }
 
-      router.push('/d/dashboard');
-      router.refresh();
+      // Hard redirect to dashboard ensures fresh cookie attachment
+      window.location.href = data.redirect || '/d/dashboard';
     } catch (err: any) {
       setErrorMessage(err.message);
-    } finally {
       setIsLoading(false);
     }
   };
@@ -72,11 +71,9 @@ export default function LoginForm({
         throw new Error(data.error || 'PIN verification failed');
       }
 
-      router.push('/d/dashboard');
-      router.refresh();
+      window.location.href = data.redirect || '/d/dashboard';
     } catch (err: any) {
       setErrorMessage(err.message);
-    } finally {
       setIsLoading(false);
     }
   };
@@ -103,7 +100,7 @@ export default function LoginForm({
         </div>
         <span className="px-2.5 py-1 rounded-full bg-emerald-100/80 border border-emerald-300 text-emerald-800 text-[10px] font-bold flex items-center gap-1">
           <ShieldCheck className="w-3 h-3 text-emerald-700" />
-          <span>Bound Device</span>
+          <span>Verified Terminal</span>
         </span>
       </div>
 
@@ -114,9 +111,6 @@ export default function LoginForm({
             <label className="block text-[11px] font-black text-slate-700 uppercase tracking-wider">
               6-Digit Security PIN
             </label>
-            <span className="text-[10px] text-blue-700 bg-blue-100/80 border border-blue-200 px-2 py-0.5 rounded-md font-bold">
-              Peppered SHA-256
-            </span>
           </div>
 
           {/* 6-cell interactive dot display */}

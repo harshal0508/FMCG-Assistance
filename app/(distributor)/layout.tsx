@@ -38,15 +38,13 @@ export default function DistributorLayout({
   const { language, setLanguage, t } = useTranslation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isNavigating, setIsNavigating] = useState(false);
-  const [navTargetTitle, setNavTargetTitle] = useState('');
 
-  const handleNavClick = (href: string, label?: string) => {
+  const handleNavClick = (href: string) => {
     if (href !== pathname) {
       setIsNavigating(true);
-      if (label) setNavTargetTitle(label);
       setMobileMenuOpen(false);
-      // Auto-fallback reset after 7s in case transition was cancelled or instant
-      setTimeout(() => setIsNavigating(false), 7000);
+      // Auto-fallback reset in case transition was cancelled or instant
+      setTimeout(() => setIsNavigating(false), 5000);
     }
   };
 
@@ -201,7 +199,8 @@ export default function DistributorLayout({
               <Link
                 key={item.href}
                 href={item.href}
-                onClick={() => handleNavClick(item.href, item.label)}
+                prefetch={true}
+                onClick={() => handleNavClick(item.href)}
                 className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition-colors ${
                   isActive
                     ? 'bg-white/20 text-white font-semibold'
@@ -216,7 +215,8 @@ export default function DistributorLayout({
 
           <Link
             href="/d/orders/new"
-            onClick={() => handleNavClick('/d/orders/new', language === 'hi' ? 'नया फोन ऑर्डर' : 'New Order')}
+            prefetch={true}
+            onClick={() => handleNavClick('/d/orders/new')}
             className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl bg-[#F58220] text-white font-semibold hover:bg-[#F58220]/90 transition-colors mt-3 shadow-sm"
           >
             <PlusCircle className="w-5 h-5 shrink-0" />
@@ -266,10 +266,10 @@ export default function DistributorLayout({
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 pb-20 lg:pb-0 relative">
-        {/* Instant Top Navigation Progress Bar */}
+        {/* Instant Top Navigation Progress Indicator */}
         {isNavigating && (
-          <div className="fixed top-0 left-0 right-0 h-1 z-50 overflow-hidden bg-blue-100">
-            <div className="h-full bg-gradient-to-r from-[#F58220] via-blue-500 to-[#17307A] animate-pulse w-full" />
+          <div className="fixed top-0 left-0 right-0 h-0.5 z-50 overflow-hidden bg-slate-100">
+            <div className="h-full bg-[#F58220] animate-pulse w-full" />
           </div>
         )}
 
@@ -327,21 +327,12 @@ export default function DistributorLayout({
               <LogOut className="w-3.5 h-3.5 text-rose-500" />
               <span className="hidden sm:inline">{t('logout')}</span>
             </button>
-
-            <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-700 text-xs font-medium border border-emerald-200">
-              <ShieldCheck className="w-3.5 h-3.5" />
-              <span>{language === 'hi' ? 'प्रमाणित सत्र' : 'Secure Session'}</span>
-            </div>
           </div>
         </header>
 
         {/* Page Content */}
         <main className="flex-1 p-3.5 md:p-6 lg:p-8 max-w-7xl w-full mx-auto">
-          {isNavigating ? (
-            <PageLoading targetPageName={navTargetTitle} />
-          ) : (
-            children
-          )}
+          {children}
         </main>
       </div>
 
@@ -404,7 +395,8 @@ export default function DistributorLayout({
                       <Link
                         key={item.href}
                         href={item.href}
-                        onClick={() => handleNavClick(item.href, item.label)}
+                        prefetch={true}
+                        onClick={() => handleNavClick(item.href)}
                         className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-colors ${
                           isActive
                             ? 'bg-white/20 text-white font-bold'
@@ -465,7 +457,8 @@ export default function DistributorLayout({
         {/* 1. Dashboard */}
         <Link
           href="/d/dashboard"
-          onClick={() => handleNavClick('/d/dashboard', t('dashboard'))}
+          prefetch={true}
+          onClick={() => handleNavClick('/d/dashboard')}
           className={`flex flex-col items-center justify-center flex-1 py-1 transition-colors ${
             pathname === '/d/dashboard' ? 'text-[#17307A] font-bold' : 'text-slate-500 hover:text-slate-800'
           }`}
@@ -477,7 +470,8 @@ export default function DistributorLayout({
         {/* 2. Orders */}
         <Link
           href="/d/orders"
-          onClick={() => handleNavClick('/d/orders', t('orders'))}
+          prefetch={true}
+          onClick={() => handleNavClick('/d/orders')}
           className={`flex flex-col items-center justify-center flex-1 py-1 transition-colors ${
             pathname === '/d/orders' ? 'text-[#17307A] font-bold' : 'text-slate-500 hover:text-slate-800'
           }`}
@@ -489,7 +483,8 @@ export default function DistributorLayout({
         {/* 3. Campaigns */}
         <Link
           href="/d/campaigns"
-          onClick={() => handleNavClick('/d/campaigns', language === 'hi' ? 'अभियान' : 'Campaigns')}
+          prefetch={true}
+          onClick={() => handleNavClick('/d/campaigns')}
           className={`flex flex-col items-center justify-center flex-1 py-1 transition-colors ${
             pathname === '/d/campaigns' ? 'text-[#17307A] font-bold' : 'text-slate-500 hover:text-slate-800'
           }`}
@@ -501,7 +496,8 @@ export default function DistributorLayout({
         {/* 4. Analytics */}
         <Link
           href="/d/analytics"
-          onClick={() => handleNavClick('/d/analytics', language === 'hi' ? 'विश्लेषण' : 'Analytics')}
+          prefetch={true}
+          onClick={() => handleNavClick('/d/analytics')}
           className={`flex flex-col items-center justify-center flex-1 py-1 transition-colors ${
             pathname === '/d/analytics' ? 'text-[#17307A] font-bold' : 'text-slate-500 hover:text-slate-800'
           }`}

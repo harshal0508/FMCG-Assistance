@@ -117,7 +117,7 @@ export default function DevicesClientView({ initialDevices }: Props) {
             <span>Device-Bound PIN</span>
           </div>
           <p className="text-xs text-slate-500">
-            Sign in with Google on any new trusted device to register the hardware and set your 6-digit peppered PIN.
+            Sign in with Google on any new trusted device to register the hardware and set your 6-digit security PIN.
           </p>
         </div>
 
