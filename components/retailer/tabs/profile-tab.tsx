@@ -218,15 +218,16 @@ export default function ProfileTab({
           })}
         </div>
 
-        {/* Action Button: Return / Exit to Portals Hub */}
+        {/* Action Button: Log Out / Exit to Portals Hub */}
         <div className="pt-2 border-t border-slate-100">
-          <Link
-            href="/"
-            className="w-full py-2.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 font-extrabold text-xs transition-all flex items-center justify-center gap-2"
+          <button
+            type="button"
+            onClick={() => { window.location.href = '/'; }}
+            className="w-full py-2.5 px-3 rounded-xl bg-rose-50 hover:bg-rose-100 active:scale-95 text-rose-700 font-extrabold text-xs transition-all flex items-center justify-center gap-2 border border-rose-200 cursor-pointer"
           >
-            <LogOut className="w-3.5 h-3.5 text-slate-500" />
-            <span>{language === 'hi' ? 'पोर्टल हब पर वापस जाएं' : 'Exit to Portals Hub'}</span>
-          </Link>
+            <LogOut className="w-3.5 h-3.5 text-rose-500" />
+            <span>{language === 'hi' ? 'दुकानदार सत्र से लॉग आउट करें' : 'Log Out from Retailer Session'}</span>
+          </button>
         </div>
       </div>
 

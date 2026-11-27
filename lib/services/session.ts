@@ -135,7 +135,8 @@ export async function createServerSession(
   userId: string,
   deviceId: string,
   userAgent?: string,
-  ip?: string
+  ip?: string,
+  unlockedUntil?: Date | null
 ) {
   const rawToken = crypto.randomBytes(32).toString('hex');
   const tokenHash = hashToken(rawToken);
@@ -148,7 +149,7 @@ export async function createServerSession(
       device_id: deviceId,
       token_hash: tokenHash,
       expires_at: expiresAt,
-      unlocked_until: null, // Starts locked until PIN is verified
+      unlocked_until: unlockedUntil ?? null,
       user_agent: userAgent || null,
       ip_hash: ipHash,
     },

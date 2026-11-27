@@ -99,7 +99,7 @@ export default function DistributorLayout({
     } catch {
       // ignore
     }
-    router.push('/d/login');
+    window.location.href = '/d/login';
   };
 
   const navItems = [

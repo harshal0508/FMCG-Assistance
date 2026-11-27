@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
+import bcrypt from 'bcryptjs';
 import {
   validateServerSession,
   verifyDevicePinAndUnlock,
-  verifyDevicePin,
   createServerSession,
-  unlockSession,
   SESSION_COOKIE_NAME,
+  pepperPin,
+  IDLE_UNLOCK_DURATION_MS,
 } from '@/lib/services/session';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { prisma } from '@/lib/db/prisma';
@@ -91,11 +92,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Verify PIN against owner's registered devices
+    // Verify PIN directly in memory against owner's registered devices (no extra DB query)
     let matchedDevice = null;
+    const peppered = pepperPin(pin.trim());
     for (const dev of ownerUser.devices) {
       if (dev.pin_hash) {
-        const isMatch = await verifyDevicePin(dev.id, pin.trim());
+        let isMatch = await bcrypt.compare(peppered, dev.pin_hash);
+        if (!isMatch) {
+          isMatch = await bcrypt.compare(pin.trim(), dev.pin_hash);
+        }
         if (isMatch) {
           matchedDevice = dev;
           break;
@@ -110,16 +115,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // PIN is correct! Establish verified session & unlock
+    // PIN is correct! Establish verified session & unlock in a single query
     const userAgent = req.headers.get('user-agent') || 'Browser Workstation';
+    const unlockedUntil = new Date(Date.now() + IDLE_UNLOCK_DURATION_MS);
     const { session, rawToken: newRawToken } = await createServerSession(
       ownerUser.id,
       matchedDevice.id,
+      userAgent,
       ip,
-      userAgent
+      unlockedUntil
     );
-
-    await unlockSession(session.id);
 
     const response = NextResponse.json({
       success: true,

@@ -21,6 +21,7 @@ import {
   Clock,
   ArrowLeftRight,
   TrendingUp,
+  LogOut,
 } from 'lucide-react';
 import { RouteCutoffResult } from '@/lib/services/route-cutoff';
 import { HistoricalOrder } from './modals/bill-modal';
@@ -568,6 +569,15 @@ export default function RetailerPortal({
               className="px-2 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-bold transition-all border border-white/20 active:scale-95"
             >
               {language === 'en' ? 'हिं' : 'EN'}
+            </button>
+            <button
+              type="button"
+              onClick={() => { window.location.href = '/'; }}
+              className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl bg-white/10 hover:bg-rose-500/30 text-white hover:text-rose-200 text-xs font-bold transition-all border border-white/20 hover:border-rose-400/40 active:scale-95 flex items-center gap-1 cursor-pointer"
+              title={language === 'hi' ? 'लॉग आउट' : 'Log Out'}
+            >
+              <LogOut className="w-3.5 h-3.5 text-rose-300" />
+              <span className="hidden sm:inline">{language === 'hi' ? 'लॉग आउट' : 'Log Out'}</span>
             </button>
           </div>
         </div>
