@@ -4,7 +4,7 @@ import { prisma } from '@/lib/db/prisma';
 import { SESSION_COOKIE_NAME, validateServerSession } from '@/lib/services/session';
 import AnalyticsView, { AnalyticsData } from '@/components/distributor/analytics-view';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 10;
 
 export default async function AnalyticsPage() {
   const cookieStore = cookies();
@@ -25,50 +25,50 @@ export default async function AnalyticsPage() {
   const now = new Date();
   const startDate = new Date(now.getTime() - 56 * 24 * 60 * 60 * 1000);
 
-  // 1. Fetch areas & route groups (Area -> route_areas -> RouteGroup -> schedules)
-  const areas = await prisma.area.findMany({
-    where: { tenant_id: tenantId },
-    include: {
-      route_areas: {
-        include: {
-          route_group: {
-            include: { schedules: true },
+  // Fetch areas and orders in parallel
+  const [areas, orders] = await Promise.all([
+    prisma.area.findMany({
+      where: { tenant_id: tenantId },
+      include: {
+        route_areas: {
+          include: {
+            route_group: {
+              include: { schedules: true },
+            },
+          },
+        },
+        shops: {
+          select: {
+            id: true,
+            name: true,
+            owner_name: true,
+            hold_flag: true,
           },
         },
       },
-      shops: {
-        select: {
-          id: true,
-          name: true,
-          owner_name: true,
-          hold_flag: true,
+      orderBy: { name: 'asc' },
+    }),
+    prisma.order.findMany({
+      where: {
+        tenant_id: tenantId,
+        status: { not: 'CANCELLED' },
+        created_at: { gte: startDate },
+      },
+      include: {
+        shop: {
+          include: { area: true },
         },
-      },
-    },
-    orderBy: { name: 'asc' },
-  });
-
-  // 2. Fetch orders (excluding cancelled)
-  const orders = await prisma.order.findMany({
-    where: {
-      tenant_id: tenantId,
-      status: { not: 'CANCELLED' },
-      created_at: { gte: startDate },
-    },
-    include: {
-      shop: {
-        include: { area: true },
-      },
-      lines: {
-        include: {
-          tenant_product: {
-            include: { brand: true },
+        lines: {
+          include: {
+            tenant_product: {
+              include: { brand: true },
+            },
           },
         },
       },
-    },
-    orderBy: { created_at: 'asc' },
-  });
+      orderBy: { created_at: 'asc' },
+    }),
+  ]);
 
   // 3. Summary metrics
   const totalOrders = orders.length;

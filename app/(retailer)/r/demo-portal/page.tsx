@@ -9,7 +9,7 @@ import RetailerPortal, {
   HistoricalOrder,
 } from '@/components/retailer/retailer-portal';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 10;
 
 export default async function RetailerDemoPortalPage() {
   const shop = await prisma.shop.findFirst({
@@ -43,25 +43,39 @@ export default async function RetailerDemoPortalPage() {
   const { tenant } = shop;
   const lastOrderRaw = shop.orders[0];
 
-  const brands = await prisma.brand.findMany({
-    where: { tenant_id: tenant.id },
-    select: { id: true, name: true },
-    orderBy: { name: 'asc' },
-  });
-
-  const products = await prisma.tenantProduct.findMany({
-    where: { tenant_id: tenant.id, is_visible: true },
-    include: {
-      brand: true,
-      master_product: { include: { category: true } },
-    },
-    orderBy: [{ brand: { name: 'asc' } }, { name: 'asc' }],
-  });
-
-  const schemes = await prisma.scheme.findMany({
-    where: { tenant_id: tenant.id, is_active: true },
-    take: 4,
-  });
+  // Execute catalog, schemes, cutoff, and festivals in parallel
+  const [brands, products, schemes, routeCutoff, activeFestivals] = await Promise.all([
+    prisma.brand.findMany({
+      where: { tenant_id: tenant.id },
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
+    }),
+    prisma.tenantProduct.findMany({
+      where: { tenant_id: tenant.id, is_visible: true },
+      include: {
+        brand: true,
+        master_product: { include: { category: true } },
+      },
+      orderBy: [{ brand: { name: 'asc' } }, { name: 'asc' }],
+    }),
+    prisma.scheme.findMany({
+      where: { tenant_id: tenant.id, is_active: true },
+      take: 4,
+    }),
+    getShopRouteCutoffInfo(shop.id).catch((err) => {
+      console.error('Failed to compute route cutoff for shop:', err);
+      return null;
+    }),
+    prisma.festivalSuggestion.findMany({
+      where: {
+        tenant_id: tenant.id,
+        is_active: true,
+        end_date: { gte: new Date() },
+      },
+      orderBy: { start_date: 'asc' },
+      take: 3,
+    }),
+  ]);
 
   const serializedProducts: RetailerProduct[] = products.map((p) => ({
     id: p.id,
@@ -127,24 +141,7 @@ export default async function RetailerDemoPortalPage() {
       }
     : null;
 
-  // F4: Compute dynamic route schedule, cut-off countdown, and scheduled delivery date
-  let routeCutoff = null;
-  try {
-    routeCutoff = await getShopRouteCutoffInfo(shop.id);
-  } catch (err) {
-    console.error('Failed to compute route cutoff for shop:', err);
-  }
 
-  // Fetch active festival suggestions for this tenant
-  const activeFestivals = await prisma.festivalSuggestion.findMany({
-    where: {
-      tenant_id: tenant.id,
-      is_active: true,
-      end_date: { gte: new Date() },
-    },
-    orderBy: { start_date: 'asc' },
-    take: 3,
-  });
 
   const serializedFestivals = activeFestivals.map((fest) => {
     let parsedItems: { tenant_product_id: string; suggested_qty_base: number }[] = [];

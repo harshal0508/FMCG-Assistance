@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/db/prisma';
 import InventoryManager from '@/components/distributor/inventory-manager';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 10;
 
 export default async function DistributorInventoryPage() {
   const tenantId = 'tenant_shree_shyam_alwar';

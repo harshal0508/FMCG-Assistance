@@ -13,10 +13,13 @@ export default async function StaffLoginPage() {
   const allowDemo = isDemoLoginAllowed();
   const sessionToken = cookies().get(SESSION_COOKIE_NAME)?.value;
 
-  // Retrieve current tenant & owner details from DB
-  const tenant = await prisma.tenant.findFirst({
-    select: { name: true, city: true, state: true, owner_name: true },
-  });
+  // Retrieve tenant & session data concurrently
+  const [tenant, sessionData] = await Promise.all([
+    prisma.tenant.findFirst({
+      select: { name: true, city: true, state: true, owner_name: true },
+    }),
+    sessionToken ? validateServerSession(sessionToken) : Promise.resolve(null),
+  ]);
 
   const businessName = tenant?.name || 'Demo Traders';
   const ownerNameFallback = tenant?.owner_name || 'Demo Owner';
@@ -25,15 +28,12 @@ export default async function StaffLoginPage() {
   let deviceName = 'Owner Workstation (Demo)';
   let ownerName = ownerNameFallback;
 
-  if (sessionToken) {
-    const sessionData = await validateServerSession(sessionToken);
-    if (sessionData) {
-      if (sessionData.isUnlocked) {
-        redirect('/d/dashboard');
-      }
-      deviceName = sessionData.device.device_name;
-      ownerName = sessionData.user.name || ownerNameFallback;
+  if (sessionData) {
+    if (sessionData.isUnlocked) {
+      redirect('/d/dashboard');
     }
+    deviceName = sessionData.device.device_name;
+    ownerName = sessionData.user.name || ownerNameFallback;
   }
 
   return (

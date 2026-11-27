@@ -3,24 +3,65 @@ import { getQuietShops } from '@/lib/services/quiet-shops';
 import { OrderStatus, ShopStatus } from '@prisma/client';
 import DashboardView from '@/components/distributor/dashboard-view';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 10;
 
 export default async function DistributorDashboardPage() {
   const tenantId = 'tenant_shree_shyam_alwar';
   const tenantTimezone = 'Asia/Kolkata';
   const now = new Date();
   const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: tenantTimezone }).format(now);
+  const eightWeeksAgo = new Date(now.getTime() - 8 * 7 * 86400000);
 
-  // 1. Fetch Orders with Shop & Area
-  const allOrders = await prisma.order.findMany({
-    where: { tenant_id: tenantId },
-    include: {
-      shop: {
-        include: { area: true },
+  // Execute all independent database queries in parallel
+  const [allOrders, bills, quietShopsResult, schedules, areas, ordersForTrend] = await Promise.all([
+    prisma.order.findMany({
+      where: { tenant_id: tenantId },
+      include: {
+        shop: {
+          include: { area: true },
+        },
       },
-    },
-    orderBy: { created_at: 'desc' },
-  });
+      orderBy: { created_at: 'desc' },
+    }),
+    prisma.bill.findMany({
+      where: { tenant_id: tenantId },
+      include: { allocations: true },
+    }),
+    getQuietShops(tenantId),
+    prisma.routeSchedule.findMany({
+      where: { tenant_id: tenantId, is_active: true },
+      include: {
+        route_group: {
+          include: {
+            route_areas: {
+              include: { area: true },
+            },
+          },
+        },
+      },
+    }),
+    prisma.area.findMany({
+      where: { tenant_id: tenantId },
+      include: {
+        shops: {
+          include: {
+            orders: {
+              where: { status: { not: OrderStatus.CANCELLED } },
+              select: { total_paise: true },
+            },
+          },
+        },
+      },
+    }),
+    prisma.order.findMany({
+      where: {
+        tenant_id: tenantId,
+        status: { not: OrderStatus.CANCELLED },
+        created_at: { gte: eightWeeksAgo },
+      },
+      select: { created_at: true, total_paise: true },
+    }),
+  ]);
 
   // Calculate Today's Orders (strictly excluding CANCELLED)
   const ordersToday = allOrders.filter((o) => {
@@ -36,17 +77,12 @@ export default async function DistributorDashboardPage() {
   ).length;
 
   // 2. Outstanding Balance To Collect
-  const bills = await prisma.bill.findMany({
-    where: { tenant_id: tenantId },
-    include: { allocations: true },
-  });
   const toCollectPaise = bills.reduce((sum, b) => {
     const paid = b.allocations.reduce((acc, a) => acc + a.amount_paise, 0);
     return sum + Math.max(0, b.total_paise - paid);
   }, 0);
 
   // 3. Quiet Shops (A10: Uses median ordering interval, strictly ignores cancelled orders)
-  const quietShopsResult = await getQuietShops(tenantId);
   const quietShopsList = quietShopsResult.map((q) => ({
     id: q.shopId,
     name: q.name,
@@ -60,19 +96,6 @@ export default async function DistributorDashboardPage() {
 
   // 4. Today's Delivery Route
   const dayOfWeek = now.getDay();
-  const schedules = await prisma.routeSchedule.findMany({
-    where: { tenant_id: tenantId, is_active: true },
-    include: {
-      route_group: {
-        include: {
-          route_areas: {
-            include: { area: true },
-          },
-        },
-      },
-    },
-  });
-
   const activeSchedule =
     schedules.find((s) => s.delivery_day_of_week === dayOfWeek) || schedules[0];
   const routeAreas =
@@ -101,20 +124,6 @@ export default async function DistributorDashboardPage() {
   }));
 
   // 6. Revenue by Market Area (strictly EXCLUDING cancelled orders)
-  const areas = await prisma.area.findMany({
-    where: { tenant_id: tenantId },
-    include: {
-      shops: {
-        include: {
-          orders: {
-            where: { status: { not: OrderStatus.CANCELLED } },
-            select: { total_paise: true },
-          },
-        },
-      },
-    },
-  });
-
   const areaRevenue = areas
     .map((a) => {
       const total_paise = a.shops.reduce(
@@ -129,17 +138,6 @@ export default async function DistributorDashboardPage() {
       };
     })
     .sort((a, b) => b.total_paise - a.total_paise);
-
-  // 7. Weekly Orders Trend (8 weeks)
-  const eightWeeksAgo = new Date(now.getTime() - 8 * 7 * 86400000);
-  const ordersForTrend = await prisma.order.findMany({
-    where: {
-      tenant_id: tenantId,
-      status: { not: OrderStatus.CANCELLED },
-      created_at: { gte: eightWeeksAgo },
-    },
-    select: { created_at: true, total_paise: true },
-  });
 
   const weeklyTrend = [];
   for (let w = 7; w >= 0; w--) {

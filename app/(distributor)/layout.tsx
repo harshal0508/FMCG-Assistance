@@ -86,7 +86,7 @@ export default function DistributorLayout({
     return () => {
       isMounted = false;
     };
-  }, [pathname]);
+  }, []);
 
   // Close mobile drawer on route transition
   useEffect(() => {

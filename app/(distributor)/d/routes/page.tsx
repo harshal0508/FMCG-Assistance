@@ -4,7 +4,7 @@ import { prisma } from '@/lib/db/prisma';
 import { SESSION_COOKIE_NAME, validateServerSession } from '@/lib/services/session';
 import RoutesView from '@/components/distributor/routes-view';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 10;
 
 export default async function RoutesPage() {
   const cookieStore = cookies();

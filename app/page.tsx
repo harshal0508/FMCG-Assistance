@@ -20,24 +20,25 @@ import {
   BadgeCheck,
 } from 'lucide-react';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 60;
 
 export default async function HomePage() {
-  // Fetch sample shop token from seed for 1-click retailer test access
-  const demoShop = await prisma.shop.findFirst({
-    where: { phone: '9829100001' },
-    include: {
-      tokens: { where: { revoked_at: null }, take: 1 },
-      tenant: true,
-      area: true,
-      orders: {
-        orderBy: { created_at: 'desc' },
-        take: 1,
+  // Fetch sample shop token & tenant details in parallel
+  const [demoShop, tenantRecord] = await Promise.all([
+    prisma.shop.findFirst({
+      where: { phone: '9829100001' },
+      include: {
+        tokens: { where: { revoked_at: null }, take: 1 },
+        tenant: true,
+        area: true,
+        orders: {
+          orderBy: { created_at: 'desc' },
+          take: 1,
+        },
       },
-    },
-  });
-
-  const tenantRecord = await prisma.tenant.findFirst({ select: { name: true } });
+    }),
+    prisma.tenant.findFirst({ select: { name: true } }),
+  ]);
   const tenantName = tenantRecord?.name || 'Demo Traders';
 
   const retailerLink = '/r/demo-portal';

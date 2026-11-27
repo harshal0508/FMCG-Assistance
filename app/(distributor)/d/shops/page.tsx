@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/db/prisma';
 import ShopDirectory, { ShopItem, AreaItem, RateGroupOption } from '@/components/distributor/shop-directory';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 10;
 
 export default async function DistributorShopsPage() {
   const activeTenant = await prisma.tenant.findFirst({
@@ -9,44 +9,45 @@ export default async function DistributorShopsPage() {
   });
   const tenantId = activeTenant?.id || 'tenant_shree_shyam_alwar';
 
-  const areas = await prisma.area.findMany({
-    where: { tenant_id: tenantId },
-    select: { id: true, name: true },
-    orderBy: { name: 'asc' },
-  });
-
-  const rateGroups = await prisma.rateGroup.findMany({
-    where: { tenant_id: tenantId },
-    select: { id: true, name: true, discount_type: true, discount_value: true },
-    orderBy: { name: 'asc' },
-  });
-
-  const shops = await prisma.shop.findMany({
-    where: { tenant_id: tenantId },
-    include: {
-      area: {
-        select: { id: true, name: true },
-      },
-      rate_group: {
-        select: { id: true, name: true, discount_type: true, discount_value: true },
-      },
-      tokens: {
-        where: { revoked_at: null },
-        select: { token_hash: true },
-        take: 1,
-      },
-      orders: {
-        where: { status: { not: 'CANCELLED' } },
-        select: {
-          created_at: true,
-          total_paise: true,
+  // Fetch areas, rate groups, and shops concurrently
+  const [areas, rateGroups, shops] = await Promise.all([
+    prisma.area.findMany({
+      where: { tenant_id: tenantId },
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
+    }),
+    prisma.rateGroup.findMany({
+      where: { tenant_id: tenantId },
+      select: { id: true, name: true, discount_type: true, discount_value: true },
+      orderBy: { name: 'asc' },
+    }),
+    prisma.shop.findMany({
+      where: { tenant_id: tenantId },
+      include: {
+        area: {
+          select: { id: true, name: true },
         },
-        orderBy: { created_at: 'desc' },
-        take: 1,
+        rate_group: {
+          select: { id: true, name: true, discount_type: true, discount_value: true },
+        },
+        tokens: {
+          where: { revoked_at: null },
+          select: { token_hash: true },
+          take: 1,
+        },
+        orders: {
+          where: { status: { not: 'CANCELLED' } },
+          select: {
+            created_at: true,
+            total_paise: true,
+          },
+          orderBy: { created_at: 'desc' },
+          take: 1,
+        },
       },
-    },
-    orderBy: { shop_number: 'asc' },
-  });
+      orderBy: { shop_number: 'asc' },
+    }),
+  ]);
 
   // Serialize dates for Client Component
   const serializedShops: ShopItem[] = shops.map((s) => ({
